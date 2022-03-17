@@ -1,18 +1,4 @@
-/*
-  Copyright 2013 Google LLC All rights reserved.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at:
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-*/
 
 /*
    american fuzzy lop - wrapper for GCC and clang
@@ -61,7 +47,7 @@ static u8   be_quiet,               /* Quiet mode                        */
 /* Try to find our "fake" GNU assembler in AFL_PATH or at the location derived
    from argv[0]. If that fails, abort. */
 
-static void find_as(u8* argv0) {
+static void find_as(u8* argv0) {  //找汇编器as
 
   u8 *afl_path = getenv("AFL_PATH");
   u8 *slash, *tmp;
@@ -69,7 +55,7 @@ static void find_as(u8* argv0) {
   if (afl_path) {
 
     tmp = alloc_printf("%s/as", afl_path);
-
+    //检测afl_path路径是否可读可写（有效为0）
     if (!access(tmp, X_OK)) {
       as_path = afl_path;
       ck_free(tmp);
@@ -80,14 +66,19 @@ static void find_as(u8* argv0) {
 
   }
 
-  slash = strrchr(argv0, '/');
 
+  //从程序路径（命令的路径，非命令行所在路径，不一定是绝对路径）
+  slash = strrchr(argv0, '/');
+  /*example:
+    argv=C:/Users/Bruce/Clang
+    slash=右起第一个"/"的位置，即strrchr返回指针，故*slash并不是冗余的（之前想错了）
+  */  
   if (slash) {
 
     u8 *dir;
 
     *slash = 0;
-    dir = ck_strdup(argv0);
+    dir = ck_strdup(argv0);//字符串拷贝，内部调用了malloc，拷贝了argv[0][0]~*slash
     *slash = '/';
 
     tmp = alloc_printf("%s/afl-as", dir);
@@ -99,10 +90,10 @@ static void find_as(u8* argv0) {
     }
 
     ck_free(tmp);
-    ck_free(dir);
+    ck_free(dir);//使用strdup后要free
 
   }
-
+  // AFL_PATH/as  但和第一个有啥差别....？还得调试一下
   if (!access(AFL_PATH "/as", X_OK)) {
     as_path = AFL_PATH;
     return;
@@ -114,13 +105,13 @@ static void find_as(u8* argv0) {
 
 
 /* Copy argv to cc_params, making the necessary edits. */
-
+//cc_params：给实际编译器传递的参数
 static void edit_params(u32 argc, char** argv) {
 
   u8 fortify_set = 0, asan_set = 0;
   u8 *name;
-
-#if defined(__FreeBSD__) && defined(__x86_64__)
+//通过判断某个宏是否定义了来判断OS和架构
+#if defined(__FreeBSD__) && defined(__x86_64__) 
   u8 m32_set = 0;
 #endif
 
@@ -128,7 +119,8 @@ static void edit_params(u32 argc, char** argv) {
 
   name = strrchr(argv[0], '/');
   if (!name) name = argv[0]; else name++;
-
+    //argv[0]里没有'/'，即只有程序名（如clang），就把程序名赋给name
+    //否则name++，指向'/'后一位
   if (!strncmp(name, "afl-clang", 9)) {
 
     clang_mode = 1;
@@ -151,8 +143,9 @@ static void edit_params(u32 argc, char** argv) {
        non-zero exit codes with crash conditions when working with Java
        binaries. Meh. */
 
-#ifdef __APPLE__
-
+#ifdef __APPLE__  
+    //消除gcc在MacOS下的问题：MacOS的gcc默认链接的是clang
+    //Mac OS X 10.9+ no longer uses GCC/libstdc++ but uses libc++ and Clang
     if (!strcmp(name, "afl-g++")) cc_params[0] = getenv("AFL_CXX");
     else if (!strcmp(name, "afl-gcj")) cc_params[0] = getenv("AFL_GCJ");
     else cc_params[0] = getenv("AFL_CC");
@@ -184,12 +177,13 @@ static void edit_params(u32 argc, char** argv) {
 #endif /* __APPLE__ */
 
   }
-
+  //处理编译选项
   while (--argc) {
     u8* cur = *(++argv);
 
     if (!strncmp(cur, "-B", 2)) {
-
+      //-B <目录>：将 <目录> 添加到编译器的搜索路径中
+      //-Bstatic和-Bdynamic，静态链接和动态链接
       if (!be_quiet) WARNF("-B is already set, overriding");
 
       if (!cur[2] && argc > 1) { argc--; argv++; }
@@ -198,9 +192,9 @@ static void edit_params(u32 argc, char** argv) {
     }
 
     if (!strcmp(cur, "-integrated-as")) continue;
-
+    //与fno-integrated-as对应？, Disable the integrated assembler，afl-gcc忽略了
     if (!strcmp(cur, "-pipe")) continue;
-
+    //使用管道替代临时文件，afl-gcc忽略了
 #if defined(__FreeBSD__) && defined(__x86_64__)
     if (!strcmp(cur, "-m32")) m32_set = 1;
 #endif
@@ -226,7 +220,8 @@ static void edit_params(u32 argc, char** argv) {
 
     if (!fortify_set)
       cc_params[cc_par_cnt++] = "-D_FORTIFY_SOURCE=2";
-
+      //=1仅在编译时检查，=2在执行时也会检查缓冲区溢出
+      //检查内容包括memset（会被替换成__builtin__memset_chk）、strcat、sprintf、格式化字符串溢出等
   }
 
   if (asan_set) {
@@ -267,7 +262,7 @@ static void edit_params(u32 argc, char** argv) {
     /* On 64-bit FreeBSD systems, clang -g -m32 is broken, but -m32 itself
        works OK. This has nothing to do with us, but let's avoid triggering
        that bug. */
-
+    //64位下-m32不能添加调试信息
     if (!clang_mode || !m32_set)
       cc_params[cc_par_cnt++] = "-g";
 
@@ -279,6 +274,7 @@ static void edit_params(u32 argc, char** argv) {
 
     cc_params[cc_par_cnt++] = "-O3";
     cc_params[cc_par_cnt++] = "-funroll-loops";
+    //减少循环次数
 
     /* Two indicators that you're building for fuzzing; one of them is
        AFL-specific, the other is shared with libfuzzer. */
@@ -304,13 +300,13 @@ static void edit_params(u32 argc, char** argv) {
 
 }
 
-
 /* Main entry point */
 
 int main(int argc, char** argv) {
 
   if (isatty(2) && !getenv("AFL_QUIET")) {
-
+  //isatty() 检测程序是否跑在terminal中，2应该是STDERR_FILENO
+  //检测环境变量AFL_QUIET
     SAYF(cCYA "afl-cc " cBRI VERSION cRST " by <lcamtuf@google.com>\n");
 
   } else be_quiet = 1;
@@ -335,10 +331,10 @@ int main(int argc, char** argv) {
 
   find_as(argv[0]);
 
-  edit_params(argc, argv);
+  edit_params(argc, argv); //简单来说就是把保护都开的差不多了，优化调到最高，有啥异常都能捕获
 
-  execvp(cc_params[0], (char**)cc_params);
-
+  execvp(cc_params[0], (char**)cc_params); 
+  //命令行执行代码，执行成功则不会反回，直接结束程序（不创建新进程线程）
   FATAL("Oops, failed to execute '%s' - check your PATH", cc_params[0]);
 
   return 0;
