@@ -4,6 +4,7 @@
         "config.h": "c",
         "debug.h": "c",
         "types.h": "c",
-        "alloc-inl.h": "c"
+        "alloc-inl.h": "c",
+        "afl-as.h": "c"
     }
 }

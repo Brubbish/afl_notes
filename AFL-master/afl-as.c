@@ -1,20 +1,4 @@
 /*
-  Copyright 2013 Google LLC All rights reserved.
-
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at:
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-*/
-
-/*
    american fuzzy lop - wrapper for GNU as
    ---------------------------------------
 
@@ -502,20 +486,20 @@ int main(int argc, char** argv) {
          "Rarely, when dealing with extremely complex projects, it may be advisable to\n"
          "set AFL_INST_RATIO to a value less than 100 in order to reduce the odds of\n"
          "instrumenting every discovered branch.\n\n");
-
+          //避免对每个分支都进行插桩的可能
     exit(1);
 
   }
 
-  gettimeofday(&tv, &tz);
+  gettimeofday(&tv, &tz); 
 
-  rand_seed = tv.tv_sec ^ tv.tv_usec ^ getpid();
+  rand_seed = tv.tv_sec ^ tv.tv_usec ^ getpid();  //日期和pid生成种子
 
-  srandom(rand_seed);
+  srandom(rand_seed); //设置random()的种子
 
-  edit_params(argc, argv);
+  edit_params(argc, argv);  //检查并修改参数以传递给as，具体定义在line80
 
-  if (inst_ratio_str) {
+  if (inst_ratio_str) { //如果环境变量AFL_INST_RATIO存在
 
     if (sscanf(inst_ratio_str, "%u", &inst_ratio) != 1 || inst_ratio > 100) 
       FATAL("Bad value of AFL_INST_RATIO (must be between 0 and 100)");

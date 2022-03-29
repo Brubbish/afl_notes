@@ -1,27 +1,38 @@
 
 
 /*
-   american fuzzy lop - wrapper for GCC and clang
-   ----------------------------------------------
+Overall:
+afl-gcc作为gcc的wrapper，在汇编时实现插桩
+- find_as:
+  通过①env{AFL_PATH}/as和②argv[0]同级目录/afl-as找as
 
-   Written and maintained by Michal Zalewski <lcamtuf@google.com>
+- edit_params:
+  设置执行AFL_CC/AFL_CXX/.../g++/gcc/clang/...
+  以及执行参数（编译选项）:
+    屏蔽：
+      -integrated-as
+      -pipe
+      ...
 
-   This program is a drop-in replacement for GCC or clang. The most common way
-   of using it is to pass the path to afl-gcc or afl-clang via CC when invoking
-   ./configure.
+    打开：
+      -B as_path
+      -no-integrated-as (clang_mode下)
+      -fstack-protector-all （AFL_HARDEN下）
+      -D_FORTIFY_SOURCE=2 （AFL_HARDEN下）
+      -O3
+      -funroll-loops
+      -D__AFL_COMPILER=1
+      -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION=1
+      -fno-builtin-strcmp
+      ...
 
-   (Of course, use CXX and point it to afl-g++ / afl-clang++ for C++ code.)
-
-   The wrapper needs to know the path to afl-as (renamed to 'as'). The default
-   is /usr/local/lib/afl/. A convenient way to specify alternative directories
-   would be to set AFL_PATH.
-
-   If AFL_HARDEN is set, the wrapper will compile the target app with various
-   hardening options that may help detect memory management issues more
-   reliably. You can also specify AFL_USE_ASAN to enable ASAN.
-
-   If you want to call a non-default compiler as a next step of the chain,
-   specify its location via AFL_CC or AFL_CXX.
+    可打开：
+      -fsanitize
+      FORTIFY_SOURCE
+      ...
+      
+- main:
+  调用上边两个函数，执行AFL_* /gcc/clang
 
 */
 
@@ -44,8 +55,6 @@ static u8   be_quiet,               /* Quiet mode                        */
             clang_mode;             /* Invoked as afl-clang*?            */
 
 
-/* Try to find our "fake" GNU assembler in AFL_PATH or at the location derived
-   from argv[0]. If that fails, abort. */
 
 static void find_as(u8* argv0) {  //找汇编器as
 
@@ -55,7 +64,7 @@ static void find_as(u8* argv0) {  //找汇编器as
   if (afl_path) {
 
     tmp = alloc_printf("%s/as", afl_path);
-    //检测afl_path路径是否可读可写（有效为0）
+    //检测afl_path/as文件是否存在且可执行（有效为0）
     if (!access(tmp, X_OK)) {
       as_path = afl_path;
       ck_free(tmp);
@@ -93,7 +102,7 @@ static void find_as(u8* argv0) {  //找汇编器as
     ck_free(dir);//使用strdup后要free
 
   }
-  // AFL_PATH/as  但和第一个有啥差别....？还得调试一下
+  // AFL_PATH /as，但是这个和第一个有啥区别 
   if (!access(AFL_PATH "/as", X_OK)) {
     as_path = AFL_PATH;
     return;
@@ -105,7 +114,7 @@ static void find_as(u8* argv0) {  //找汇编器as
 
 
 /* Copy argv to cc_params, making the necessary edits. */
-//cc_params：给实际编译器传递的参数
+//cc_params[]：给实际编译器传递的参数
 static void edit_params(u32 argc, char** argv) {
 
   u8 fortify_set = 0, asan_set = 0;
@@ -165,7 +174,7 @@ static void edit_params(u32 argc, char** argv) {
 
     if (!strcmp(name, "afl-g++")) {
       u8* alt_cxx = getenv("AFL_CXX");
-      cc_params[0] = alt_cxx ? alt_cxx : (u8*)"g++";
+      cc_params[0] = alt_cxx ? alt_cxx : (u8*)"g++";  //不存在AFL_CXX则为g++
     } else if (!strcmp(name, "afl-gcj")) {
       u8* alt_cc = getenv("AFL_GCJ");
       cc_params[0] = alt_cc ? alt_cc : (u8*)"gcj";
@@ -225,9 +234,6 @@ static void edit_params(u32 argc, char** argv) {
   }
 
   if (asan_set) {
-
-    /* Pass this on to afl-as to adjust map density. */
-
     setenv("AFL_USE_ASAN", "1", 1);
 
   } else if (getenv("AFL_USE_ASAN")) {
@@ -334,7 +340,7 @@ int main(int argc, char** argv) {
   edit_params(argc, argv); //简单来说就是把保护都开的差不多了，优化调到最高，有啥异常都能捕获
 
   execvp(cc_params[0], (char**)cc_params); 
-  //命令行执行代码，执行成功则不会反回，直接结束程序（不创建新进程线程）
+  //命令行执行代码，执行成功则不会返回，直接结束程序（不创建新进程线程）
   FATAL("Oops, failed to execute '%s' - check your PATH", cc_params[0]);
 
   return 0;
