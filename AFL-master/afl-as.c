@@ -1,4 +1,4 @@
-/*
+*
    american fuzzy lop - wrapper for GNU as
    ---------------------------------------
 
@@ -66,7 +66,7 @@ static u8   use_64bit = 1;
 
 static u8   use_64bit = 0;
 
-#ifdef __APPLE__
+
 #  error "Sorry, 32-bit Apple platforms are not supported."
 #endif /* __APPLE__ */
 
@@ -171,7 +171,7 @@ static void edit_params(int argc, char** argv) {
   input_file = argv[argc - 1];
 
   if (input_file[0] == '-') {
-
+  //形如 - -version,检验是否不是从afl-gcc来的
     if (!strcmp(input_file + 1, "-version")) {
       just_version = 1;
       modified_file = input_file;
@@ -207,7 +207,7 @@ wrap_things_up:
 
 /* Process input file, generate modified_file. Insert instrumentation in all
    the appropriate places. */
-
+//进行插桩,afl-as主要部分
 static void add_instrumentation(void) {
 
   static u8 line[MAX_LINE];
@@ -231,9 +231,13 @@ static void add_instrumentation(void) {
     inf = fopen(input_file, "r");
     if (!inf) PFATAL("Unable to read '%s'", input_file);
 
-  } else inf = stdin;
+  } else inf = stdin; //从命令行中输入代码(?)
 
   outfd = open(modified_file, O_WRONLY | O_EXCL | O_CREAT, 0600);
+  //O_WRONLY:只写模式
+  //O_EXCL:如果已经存在则出错,返回-1
+  //O_CREAT:不存在则创建
+  //0600:(mode),设置文件权限,和Linux设置类似
 
   if (outfd < 0) PFATAL("Unable to write to '%s'", modified_file);
 
@@ -503,18 +507,22 @@ int main(int argc, char** argv) {
 
     if (sscanf(inst_ratio_str, "%u", &inst_ratio) != 1 || inst_ratio > 100) 
       FATAL("Bad value of AFL_INST_RATIO (must be between 0 and 100)");
-
+      
   }
 
   if (getenv(AS_LOOP_ENV_VAR))
     FATAL("Endless loop when calling 'as' (remove '.' from your PATH)");
+    //AS_LOOP_ENV_VAR == "__AFL_AS_LOOPCHECK"
 
   setenv(AS_LOOP_ENV_VAR, "1", 1);
-
+  //setenv(const char* name,const char* value, int overwrite)
+  //overwrite=0时,如果已经存在环境变量则会忽略参数;!=0时则会重新赋值
+  
+  
   /* When compiling with ASAN, we don't have a particularly elegant way to skip
      ASAN-specific branches. But we can probabilistically compensate for
      that... */
-
+  // Dealling ASAN
   if (getenv("AFL_USE_ASAN") || getenv("AFL_USE_MSAN")) {
     sanitizer = 1;
     inst_ratio /= 3;
