@@ -2,7 +2,7 @@
 Learning AFL with some redundant notes by a rookie       
 ver.AFL: tree=6103710       
 
-Preparing for NPEE, doing it slowly, hoping to finish it in this semester.
+Preparing for NPEE, doing this slowly, hoping to finish it in this semester.
 # SRC structure
 ![15710161322527](https://raw.githubusercontent.com/Brubbish/pic_bed/master//blog/15710161322527.jpg)
 
